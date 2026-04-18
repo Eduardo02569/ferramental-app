@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0F1117; color: #E8EAF0; font-family: 'Segoe UI', sans-serif; }
@@ -108,6 +109,70 @@
         setLoading(false);
       }
 
+      function exportExcel() {
+        const SLABELS = { nao_iniciou:'Não Iniciou', em_andamento:'Em Andamento', concluido:'Concluído' };
+        const getS = v => v ? (SLABELS[v]||v) : '—';
+
+        // Resumo
+        const resumo = [
+          ['RELATÓRIO DE FERRAMENTAIS', '', '', '', '', '', '', '', '', ''],
+          ['Gerado em:', new Date().toLocaleString('pt-BR'), '', '', '', '', '', '', '', ''],
+          ['', '', '', '', '', '', '', '', '', ''],
+          ['Total', items.length, '', 'Concluídos', items.filter(x=>x.status==='concluido').length, '', 'Em Andamento', items.filter(x=>x.status==='em_andamento').length, 'Não Iniciados', items.filter(x=>x.status==='nao_iniciou').length],
+          ['', '', '', '', '', '', '', '', '', ''],
+        ];
+
+        // Cabeçalho
+        const header = ['Nº','Nome do Ferramental','Código','Status Geral','Laser','Torno','Fresa','CNC','Responsável','Observações','Data Registro'];
+
+        // Dados
+        const rows = items.map((p,i) => [
+          i+1,
+          p.nome,
+          p.codigo||'',
+          getS(p.status),
+          getS(p.laser),
+          getS(p.torno),
+          getS(p.fresa),
+          getS(p.cnc),
+          p.responsavel||'',
+          p.obs||'',
+          new Date(p.created_at).toLocaleDateString('pt-BR'),
+        ]);
+
+        const wsData = [...resumo, header, ...rows];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Larguras das colunas
+        ws['!cols'] = [
+          {wch:5},{wch:35},{wch:15},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:18},{wch:30},{wch:14}
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Ferramentais');
+
+        // Aba de resumo por máquina
+        const maqHeader = ['Máquina','Não Iniciou','Em Andamento','Concluído','Não Aplicável'];
+        const maqRows = ['laser','torno','fresa','cnc'].map(m => [
+          m.charAt(0).toUpperCase()+m.slice(1),
+          items.filter(x=>x[m]==='nao_iniciou').length,
+          items.filter(x=>x[m]==='em_andamento').length,
+          items.filter(x=>x[m]==='concluido').length,
+          items.filter(x=>!x[m]).length,
+        ]);
+        const ws2 = XLSX.utils.aoa_to_sheet([
+          ['RESUMO POR MÁQUINA','','','',''],
+          ['','','','',''],
+          maqHeader,
+          ...maqRows
+        ]);
+        ws2['!cols'] = [{wch:15},{wch:14},{wch:16},{wch:12},{wch:14}];
+        XLSX.utils.book_append_sheet(wb, ws2, 'Resumo Máquinas');
+
+        XLSX.writeFile(wb, `ferramentais_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+        showMsg('Excel exportado ✓');
+      }
+
       async function handleFile(e) {
         const file = e.target.files[0]; if(!file) return;
         setUploading(true);
@@ -193,6 +258,9 @@
             </div>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
               {msg && <span style={{fontSize:12,color:'#00C896'}}>{msg}</span>}
+              <button onClick={exportExcel} style={{background:'#16191F',border:'1.5px solid #2A2D36',color:'#9CA3AF',padding:'9px 16px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
+                📊 Exportar Excel
+              </button>
               <button onClick={()=>setPanel(true)} style={{background:'linear-gradient(135deg,#00C896,#0082FF)',border:'none',color:'#fff',padding:'9px 18px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13}}>+ Adicionar</button>
             </div>
           </div>
