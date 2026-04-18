@@ -12,7 +12,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0F1117; color: #E8EAF0; font-family: 'Segoe UI', sans-serif; }
-    ::-webkit-scrollbar { width: 6px; } 
+    ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0F1117; }
     ::-webkit-scrollbar-thumb { background: #2A2D36; border-radius: 3px; }
     input, textarea, button { font-family: inherit; }
@@ -86,18 +86,19 @@
     }
 
     function App() {
-      const [items,   setItems]   = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [filter,  setFilter]  = useState('todos');
-      const [search,  setSearch]  = useState('');
-      const [modal,   setModal]   = useState(null);
-      const [panel,   setPanel]   = useState(false);
-      const [saving,  setSaving]  = useState(false);
-      const [uploading,setUploading]=useState(false);
-      const [msg,     setMsg]     = useState('');
-      const [preview, setPreview] = useState(null);
-      const [blob,    setBlob]    = useState(null);
-      const [form,    setForm]    = useState({nome:'',codigo:'',status:'nao_iniciou',obs:'',responsavel:'',...emptyM()});
+      const [items,    setItems]    = useState([]);
+      const [loading,  setLoading]  = useState(true);
+      const [filter,   setFilter]   = useState('todos');
+      const [search,   setSearch]   = useState('');
+      const [modal,    setModal]    = useState(null);
+      const [panel,    setPanel]    = useState(false);
+      const [saving,   setSaving]   = useState(false);
+      const [uploading,setUploading]= useState(false);
+      const [msg,      setMsg]      = useState('');
+      const [preview,  setPreview]  = useState(null);
+      const [blob,     setBlob]     = useState(null);
+      const [imgViewer,setImgViewer]= useState(null); // visualizador de imagem ampliada
+      const [form,     setForm]     = useState({nome:'',part_number:'',cliente:'',status:'nao_iniciou',obs:'',responsavel:'',...emptyM()});
       const fileRef = useRef();
 
       useEffect(()=>{ load(); },[]);
@@ -109,52 +110,67 @@
         setLoading(false);
       }
 
+      function showMsg(m) { setMsg(m); setTimeout(()=>setMsg(''),2500); }
+
       function exportExcel() {
         const SLABELS = { nao_iniciou:'Não Iniciou', em_andamento:'Em Andamento', concluido:'Concluído' };
         const getS = v => v ? (SLABELS[v]||v) : '—';
 
-        // Resumo
         const resumo = [
-          ['RELATÓRIO DE FERRAMENTAIS', '', '', '', '', '', '', '', '', ''],
-          ['Gerado em:', new Date().toLocaleString('pt-BR'), '', '', '', '', '', '', '', ''],
-          ['', '', '', '', '', '', '', '', '', ''],
-          ['Total', items.length, '', 'Concluídos', items.filter(x=>x.status==='concluido').length, '', 'Em Andamento', items.filter(x=>x.status==='em_andamento').length, 'Não Iniciados', items.filter(x=>x.status==='nao_iniciou').length],
-          ['', '', '', '', '', '', '', '', '', ''],
+          ['RELATÓRIO DE FERRAMENTAIS','','','','','','','','','','',''],
+          ['Gerado em:', new Date().toLocaleString('pt-BR'),'','','','','','','','','',''],
+          ['','','','','','','','','','','',''],
+          ['Total', items.length, '', 'Concluídos', items.filter(x=>x.status==='concluido').length, '', 'Em Andamento', items.filter(x=>x.status==='em_andamento').length, '', 'Não Iniciados', items.filter(x=>x.status==='nao_iniciou').length,''],
+          ['','','','','','','','','','','',''],
         ];
 
-        // Cabeçalho
-        const header = ['Nº','Nome do Ferramental','Código','Status Geral','Laser','Torno','Fresa','CNC','Responsável','Observações','Data Registro'];
+        const header = ['Nº','Nome do Ferramental','Part Number','Cliente','Status Geral','Laser','Torno','Fresa','CNC','Responsável','Observações','Data Registro','Link da Foto'];
 
-        // Dados
-        const rows = items.map((p,i) => [
-          i+1,
-          p.nome,
-          p.codigo||'',
-          getS(p.status),
-          getS(p.laser),
-          getS(p.torno),
-          getS(p.fresa),
-          getS(p.cnc),
-          p.responsavel||'',
-          p.obs||'',
-          new Date(p.created_at).toLocaleDateString('pt-BR'),
-        ]);
+        const rows = items.map((p,i) => {
+          const fotoUrl = p.fotos?.[0]?.url || '—';
+          return [
+            i+1,
+            p.nome,
+            p.part_number||'—',
+            p.cliente||'—',
+            getS(p.status),
+            getS(p.laser),
+            getS(p.torno),
+            getS(p.fresa),
+            getS(p.cnc),
+            p.responsavel||'—',
+            p.obs||'—',
+            new Date(p.created_at).toLocaleDateString('pt-BR'),
+            fotoUrl,
+          ];
+        });
 
         const wsData = [...resumo, header, ...rows];
         const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-        // Larguras das colunas
+        // Adiciona hiperlinks na coluna de foto (coluna M = índice 12, linha 6 em diante)
+        rows.forEach((row, i) => {
+          const fotoUrl = row[12];
+          if (fotoUrl && fotoUrl !== '—') {
+            const cellRef = XLSX.utils.encode_cell({r: resumo.length + 1 + i, c: 12});
+            if (!ws[cellRef]) ws[cellRef] = {};
+            ws[cellRef].l = { Target: fotoUrl, Tooltip: 'Clique para ver foto' };
+            ws[cellRef].v = 'Ver foto';
+            ws[cellRef].t = 's';
+          }
+        });
+
         ws['!cols'] = [
-          {wch:5},{wch:35},{wch:15},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:18},{wch:30},{wch:14}
+          {wch:5},{wch:32},{wch:16},{wch:18},{wch:16},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18},{wch:28},{wch:14},{wch:12}
         ];
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Ferramentais');
 
-        // Aba de resumo por máquina
+        // Aba resumo por máquina
         const maqHeader = ['Máquina','Não Iniciou','Em Andamento','Concluído','Não Aplicável'];
-        const maqRows = ['laser','torno','fresa','cnc'].map(m => [
-          m.charAt(0).toUpperCase()+m.slice(1),
+        const maqRows = MACHINES.map(m => [
+          MLABELS[m],
           items.filter(x=>x[m]==='nao_iniciou').length,
           items.filter(x=>x[m]==='em_andamento').length,
           items.filter(x=>x[m]==='concluido').length,
@@ -168,6 +184,27 @@
         ]);
         ws2['!cols'] = [{wch:15},{wch:14},{wch:16},{wch:12},{wch:14}];
         XLSX.utils.book_append_sheet(wb, ws2, 'Resumo Máquinas');
+
+        // Aba resumo por cliente
+        const clientes = [...new Set(items.map(x=>x.cliente||'Sem cliente'))];
+        const cliRows = clientes.map(c => {
+          const its = items.filter(x=>(x.cliente||'Sem cliente')===c);
+          return [
+            c,
+            its.length,
+            its.filter(x=>x.status==='concluido').length,
+            its.filter(x=>x.status==='em_andamento').length,
+            its.filter(x=>x.status==='nao_iniciou').length,
+          ];
+        });
+        const ws3 = XLSX.utils.aoa_to_sheet([
+          ['RESUMO POR CLIENTE','','','',''],
+          ['','','','',''],
+          ['Cliente','Total','Concluídos','Em Andamento','Não Iniciados'],
+          ...cliRows
+        ]);
+        ws3['!cols'] = [{wch:20},{wch:8},{wch:14},{wch:16},{wch:14}];
+        XLSX.utils.book_append_sheet(wb, ws3, 'Resumo Clientes');
 
         XLSX.writeFile(wb, `ferramentais_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
         showMsg('Excel exportado ✓');
@@ -186,10 +223,13 @@
         setSaving(true);
         try {
           const {data:item,error} = await sb.from('ferramentais').insert([{
-            nome:form.nome.trim(), codigo:form.codigo.trim(),
-            status:form.status, obs:form.obs.trim(),
-            responsavel:form.responsavel.trim(),
-            laser:form.laser, torno:form.torno, fresa:form.fresa, cnc:form.cnc,
+            nome: form.nome.trim(),
+            part_number: form.part_number.trim(),
+            cliente: form.cliente.trim(),
+            status: form.status,
+            obs: form.obs.trim(),
+            responsavel: form.responsavel.trim(),
+            laser: form.laser, torno: form.torno, fresa: form.fresa, cnc: form.cnc,
           }]).select().single();
           if(error) throw error;
           if(blob) {
@@ -201,15 +241,13 @@
             }
           }
           showMsg('Salvo ✓');
-          setForm({nome:'',codigo:'',status:'nao_iniciou',obs:'',responsavel:'',...emptyM()});
+          setForm({nome:'',part_number:'',cliente:'',status:'nao_iniciou',obs:'',responsavel:'',...emptyM()});
           setPreview(null); setBlob(null); setPanel(false);
           if(fileRef.current) fileRef.current.value='';
           load();
         } catch(e) { showMsg('Erro ao salvar'); }
         setSaving(false);
       }
-
-      function showMsg(m) { setMsg(m); setTimeout(()=>setMsg(''),2500); }
 
       async function changeStatus(id,status) {
         await sb.from('ferramentais').update({status}).eq('id',id);
@@ -231,7 +269,10 @@
 
       const filtered = items.filter(p=>{
         const mf = filter==='todos'||p.status===filter;
-        const ms = !search||p.nome.toLowerCase().includes(search.toLowerCase())||(p.codigo||'').toLowerCase().includes(search.toLowerCase());
+        const ms = !search||
+          p.nome.toLowerCase().includes(search.toLowerCase())||
+          (p.part_number||'').toLowerCase().includes(search.toLowerCase())||
+          (p.cliente||'').toLowerCase().includes(search.toLowerCase());
         return mf&&ms;
       });
 
@@ -256,12 +297,14 @@
                 <div style={{fontSize:11,color:'#6B7280'}}>Controle de ferramentais</div>
               </div>
             </div>
-            <div style={{display:'flex',gap:10,alignItems:'center'}}>
+            <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
               {msg && <span style={{fontSize:12,color:'#00C896'}}>{msg}</span>}
               <button onClick={exportExcel} style={{background:'#16191F',border:'1.5px solid #2A2D36',color:'#9CA3AF',padding:'9px 16px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13,display:'flex',alignItems:'center',gap:6}}>
                 📊 Exportar Excel
               </button>
-              <button onClick={()=>setPanel(true)} style={{background:'linear-gradient(135deg,#00C896,#0082FF)',border:'none',color:'#fff',padding:'9px 18px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13}}>+ Adicionar</button>
+              <button onClick={()=>setPanel(true)} style={{background:'linear-gradient(135deg,#00C896,#0082FF)',border:'none',color:'#fff',padding:'9px 18px',borderRadius:8,cursor:'pointer',fontWeight:600,fontSize:13}}>
+                + Adicionar
+              </button>
             </div>
           </div>
 
@@ -273,8 +316,8 @@
                 <span style={{fontSize:17,color}}>{counts[key]}</span>{label}
               </button>
             ))}
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nome ou código..."
-              style={{...inp,marginLeft:'auto',minWidth:210,padding:'9px 14px'}}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nome, part number ou cliente..."
+              style={{...inp,marginLeft:'auto',minWidth:230,padding:'9px 14px'}}/>
           </div>
 
           {/* GRID */}
@@ -302,8 +345,9 @@
                     <div style={{display:'inline-flex',alignItems:'center',gap:5,background:st.bg,border:`1px solid ${st.color}40`,borderRadius:20,padding:'3px 10px',marginBottom:8}}>
                       <span style={{color:st.color,fontSize:11,fontWeight:700}}>{st.icon} {st.label}</span>
                     </div>
-                    <div style={{fontWeight:600,fontSize:13,marginBottom:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.nome}</div>
-                    {p.codigo && <div style={{fontSize:11,color:'#6B7280',marginBottom:8}}>Cód: {p.codigo}</div>}
+                    <div style={{fontWeight:600,fontSize:13,marginBottom:3,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.nome}</div>
+                    {p.part_number && <div style={{fontSize:11,color:'#6B7280',marginBottom:2}}>PN: {p.part_number}</div>}
+                    {p.cliente && <div style={{fontSize:11,color:'#6B7280',marginBottom:6}}>Cliente: {p.cliente}</div>}
                     <div style={{borderTop:'1px solid #2A2D36',paddingTop:8,display:'flex',flexDirection:'column',gap:4}}>
                       {MACHINES.map(m=>{
                         const ms = p[m]?STATUS[p[m]]:null;
@@ -323,25 +367,50 @@
             })}
           </div>
 
-          {/* MODAL */}
+          {/* VISUALIZADOR DE IMAGEM AMPLIADA */}
+          {imgViewer && (
+            <div onClick={()=>setImgViewer(null)}
+              style={{position:'fixed',inset:0,background:'#000000CC',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20,cursor:'zoom-out'}}>
+              <img src={imgViewer} alt="Foto ampliada"
+                style={{maxWidth:'95vw',maxHeight:'95vh',borderRadius:12,boxShadow:'0 0 60px #000',objectFit:'contain'}}/>
+              <button onClick={()=>setImgViewer(null)}
+                style={{position:'absolute',top:20,right:20,background:'#16191F',border:'1.5px solid #2A2D36',borderRadius:50,width:40,height:40,color:'#E8EAF0',fontSize:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+            </div>
+          )}
+
+          {/* MODAL DETALHE */}
           {modal && (()=>{
             const st = STATUS[modal.status]||STATUS.nao_iniciou;
             const foto = modal.fotos?.[0]?.url;
             return (
               <div onClick={()=>setModal(null)} style={{position:'fixed',inset:0,background:'#00000090',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,padding:20}}>
                 <div onClick={e=>e.stopPropagation()} style={{background:'#16191F',borderRadius:18,width:'100%',maxWidth:500,border:'1.5px solid #2A2D36',overflow:'hidden',maxHeight:'90vh',overflowY:'auto'}}>
-                  <div style={{height:220,background:'#0F1117',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
-                    {foto ? <img src={foto} alt={modal.nome} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : <span style={{fontSize:48,color:'#2A2D36'}}>📷</span>}
+
+                  {/* FOTO COM BOTÃO AMPLIAR */}
+                  <div style={{height:220,background:'#0F1117',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',position:'relative'}}>
+                    {foto
+                      ? <>
+                          <img src={foto} alt={modal.nome} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                          <button
+                            onClick={e=>{e.stopPropagation();setImgViewer(foto);}}
+                            style={{position:'absolute',bottom:10,right:10,background:'#00000099',border:'1.5px solid #ffffff30',borderRadius:8,padding:'6px 12px',color:'#fff',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+                            🔍 Ver foto
+                          </button>
+                        </>
+                      : <span style={{fontSize:48,color:'#2A2D36'}}>📷</span>}
                   </div>
+
                   <div style={{padding:24}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:18}}>
                       <div>
                         <div style={{fontSize:18,fontWeight:700}}>{modal.nome}</div>
-                        {modal.codigo && <div style={{fontSize:13,color:'#6B7280',marginTop:2}}>Código: {modal.codigo}</div>}
+                        {modal.part_number && <div style={{fontSize:13,color:'#6B7280',marginTop:2}}>Part Number: {modal.part_number}</div>}
+                        {modal.cliente && <div style={{fontSize:13,color:'#6B7280',marginTop:2}}>Cliente: {modal.cliente}</div>}
                         {modal.responsavel && <div style={{fontSize:13,color:'#6B7280',marginTop:2}}>Responsável: {modal.responsavel}</div>}
                       </div>
                       <div style={{fontSize:11,color:'#4B5563'}}>{new Date(modal.created_at).toLocaleDateString('pt-BR')}</div>
                     </div>
+
                     <div style={{marginBottom:20}}>
                       <div style={{fontSize:12,color:'#6B7280',marginBottom:8,fontWeight:600}}>Status Geral</div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -353,6 +422,7 @@
                         ))}
                       </div>
                     </div>
+
                     <div style={{marginBottom:20}}>
                       <div style={{fontSize:12,color:'#6B7280',marginBottom:12,fontWeight:600}}>Status por Máquina</div>
                       <div style={{background:'#0F1117',borderRadius:12,padding:'14px 16px'}}>
@@ -361,7 +431,9 @@
                         ))}
                       </div>
                     </div>
+
                     {modal.obs && <div style={{background:'#0F1117',borderRadius:10,padding:'10px 14px',fontSize:13,color:'#9CA3AF',marginBottom:18}}>{modal.obs}</div>}
+
                     <div style={{display:'flex',gap:10}}>
                       <button onClick={()=>setModal(null)} style={{flex:1,background:'#2A2D36',border:'none',borderRadius:10,padding:'11px 0',color:'#9CA3AF',cursor:'pointer',fontSize:13}}>Fechar</button>
                       <button onClick={()=>handleDelete(modal.id)} style={{background:'#E05C5C18',border:'1px solid #E05C5C40',borderRadius:10,padding:'11px 18px',color:'#E05C5C',cursor:'pointer',fontSize:13}}>Remover</button>
@@ -380,6 +452,8 @@
                   Adicionar Ferramental
                   <button onClick={()=>setPanel(false)} style={{background:'none',border:'none',color:'#6B7280',cursor:'pointer',fontSize:18}}>✕</button>
                 </div>
+
+                {/* UPLOAD FOTO */}
                 <div onClick={()=>fileRef.current?.click()}
                   style={{border:'2px dashed #2A2D36',borderRadius:12,minHeight:120,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',marginBottom:16,overflow:'hidden'}}
                   onMouseEnter={e=>e.currentTarget.style.borderColor='#00C896'}
@@ -389,12 +463,21 @@
                     : <div style={{textAlign:'center',color:'#4B5563',padding:20}}><div style={{fontSize:32,marginBottom:8}}>📸</div><div style={{fontSize:13}}>Clique para selecionar foto</div></div>}
                 </div>
                 <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:'none'}}/>
-                {[['Nome do Ferramental *','nome','Ex: Molde Painel Porta D/E'],['Código / Referência','codigo','Ex: FER-2024-001'],['Responsável','responsavel','Ex: João Silva']].map(([label,key,ph])=>(
+
+                {/* CAMPOS */}
+                {[
+                  ['Nome do Ferramental *','nome','Ex: Molde Painel Porta D/E'],
+                  ['Part Number','part_number','Ex: PN-2024-001'],
+                  ['Cliente','cliente','Ex: Toyota, Volkswagen...'],
+                  ['Responsável','responsavel','Ex: João Silva'],
+                ].map(([label,key,ph])=>(
                   <div key={key} style={{marginBottom:14}}>
                     <div style={{fontSize:12,color:'#6B7280',marginBottom:6}}>{label}</div>
                     <input placeholder={ph} value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} style={inp}/>
                   </div>
                 ))}
+
+                {/* STATUS GERAL */}
                 <div style={{marginBottom:16}}>
                   <div style={{fontSize:12,color:'#6B7280',marginBottom:8}}>Status Geral</div>
                   <div style={{display:'flex',gap:8}}>
@@ -406,6 +489,8 @@
                     ))}
                   </div>
                 </div>
+
+                {/* MÁQUINAS */}
                 <div style={{marginBottom:16}}>
                   <div style={{fontSize:12,color:'#6B7280',marginBottom:10,fontWeight:600}}>Status por Máquina <span style={{color:'#4B5563',fontWeight:400}}>(opcional)</span></div>
                   <div style={{background:'#0F1117',borderRadius:12,padding:'14px 16px'}}>
@@ -414,10 +499,13 @@
                     ))}
                   </div>
                 </div>
+
+                {/* OBS */}
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:12,color:'#6B7280',marginBottom:6}}>Observações</div>
                   <textarea placeholder="Informações adicionais..." value={form.obs} onChange={e=>setForm(f=>({...f,obs:e.target.value}))} rows={2} style={{...inp,resize:'none'}}/>
                 </div>
+
                 <button onClick={handleAdd} disabled={!form.nome.trim()||saving}
                   style={{width:'100%',background:(!form.nome.trim()||saving)?'#2A2D36':'linear-gradient(135deg,#00C896,#0082FF)',border:'none',borderRadius:12,padding:'13px 0',color:(!form.nome.trim()||saving)?'#4B5563':'#fff',fontWeight:700,fontSize:14,cursor:(!form.nome.trim()||saving)?'not-allowed':'pointer'}}>
                   {saving?'Salvando...':'Salvar Ferramental'}
